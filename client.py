@@ -2,11 +2,17 @@ import sys
 import socket
 import json
 import random as rd
+import re
+
+
 
 
 server_ip = "localhost"
 port = int(sys.argv[1])
 
+pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
+# pattern pour chercher le nom ou la position de l'erreur
+pattern = re.compile(r"'([A-Z]{4}|[0-1][0-9])'")
 
 # connecting to the game server
 with socket.socket() as client:
@@ -24,14 +30,19 @@ with socket.socket() as client:
 
 
 def play(lives, errors, state, client):
-    print(errors)
+    # print(errors)
+    # try:
+    #     pieces.remove(state["piece"])
+    # except:
+    #     pass
+    if len(errors) != 0:
+        print(pattern.findall(errors[0]["message"]))
+    choix = rd.choice(pieces)
+    # pieces.remove(choix)
     client.send(json.dumps(
         {"response": "move",
         "move": {"pos": rd.randint(0,15),
-        "piece": f"{rd.choice(['B', 'S'])}"
-                 f"{rd.choice(['D', 'L'])}"
-                 f"{rd.choice(['E', 'F'])}"
-                 f"{rd.choice(['C', 'P'])}"},
+        "piece": choix},
         "message": "Fun message"}
         ).encode('utf-8'))
 
