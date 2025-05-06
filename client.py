@@ -3,6 +3,7 @@ import socket
 import json
 import random as rd
 import re
+from play import play, empty_cell, full_cell
 
 
 
@@ -10,9 +11,12 @@ import re
 server_ip = "localhost"
 port = int(sys.argv[1])
 
-pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
 # pattern pour chercher le nom ou la position de l'erreur
 pattern = re.compile(r"'([A-Z]{4}|[0-1][0-9])'")
+
+
+pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
+board = []
 
 # connecting to the game server
 with socket.socket() as client:
@@ -29,22 +33,23 @@ with socket.socket() as client:
     print(client.recv(32).decode())
 
 
-def play(lives, errors, state, client):
-    # print(errors)
-    # try:
-    #     pieces.remove(state["piece"])
-    # except:
-    #     pass
+def info_state(lives, errors, state, client):
+    global pieces
     if len(errors) != 0:
-        print(pattern.findall(errors[0]["message"]))
-    choix = rd.choice(pieces)
-    # pieces.remove(choix)
-    client.send(json.dumps(
-        {"response": "move",
-        "move": {"pos": rd.randint(0,15),
-        "piece": choix},
-        "message": "Fun message"}
-        ).encode('utf-8'))
+        test = pattern.findall(errors[0]["message"])
+        if test in pieces:
+            pieces.remove(test)
+    board = state["board"]
+    play(board, client, errors, lives, state, pieces)
+    
+    if state["piece"] == "null":
+        global empty_cell, full_cell
+        pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
+        board = []
+        empty_cell = set(range(16))
+        full_cell = set()
+    
+    
 
 
 def Message_recieved(s:socket):
@@ -59,7 +64,7 @@ def Message_recieved(s:socket):
         ).encode('utf-8'))
     # respond to the play with "play"
     if message["request"] == "play":
-        play(message["lives"], message["errors"], message["state"], client)
+        info_state(message["lives"], message["errors"], message["state"], client)
     
 with socket.socket() as s:
     s.bind((server_ip, port))
