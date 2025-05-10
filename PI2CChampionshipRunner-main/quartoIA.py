@@ -10,9 +10,7 @@ CLIENT_NAME = sys.argv[2]
 
 SERVER_HOST = "localhost"
 SERVER_PORT = 3000
-
-print("test")
-
+print('pduidzihdzi')
 # === Quarto helpers ===
 
 WINNING_LINES = [
