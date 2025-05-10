@@ -11,6 +11,8 @@ CLIENT_NAME = sys.argv[2]
 SERVER_HOST = "localhost"
 SERVER_PORT = 3000
 
+print("test")
+
 # === Quarto helpers ===
 
 WINNING_LINES = [
@@ -163,3 +165,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     print("Réponse du serveur:", response)
 
 écoute()
+
