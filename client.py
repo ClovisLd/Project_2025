@@ -3,16 +3,16 @@ import socket
 import json
 import random as rd
 import re
-from play import play, empty_cell, full_cell
+from play import play, full_cell, Type_left
 
 
 
-
+#172.17.10.133
 server_ip = "localhost"
 port = int(sys.argv[1])
 
 # pattern pour chercher le nom ou la position de l'erreur
-pattern = re.compile(r"'([A-Z]{4}|[0-1][0-9])'")
+pattern = re.compile(r"\b([A-Z]{4}|\d{2})\b")
 
 
 pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
@@ -21,7 +21,7 @@ board = []
 # connecting to the game server
 with socket.socket() as client:
     client.settimeout(5)
-    client.connect(("localhost", 3000))
+    client.connect((server_ip, 3000))
     print("connected")
     # send a formated json "request" and and check for a response if the connection is established
     client.sendall(json.dumps(
@@ -34,20 +34,25 @@ with socket.socket() as client:
 
 
 def info_state(lives, errors, state, client):
-    global pieces
+    global pieces, full_cell
     if len(errors) != 0:
+        print(f"\033[31m||Errors:||{errors}\033[0m")
         test = pattern.findall(errors[0]["message"])
-        if test in pieces:
-            pieces.remove(test)
+        print(state["board"])
+        if test:  # Check if test is not empty
+            piece_to_remove = test[0]
+            if piece_to_remove in pieces:
+                pieces.remove(piece_to_remove)
+                print(f"\033[92mRemoved {piece_to_remove} from pieces\033[0m")
+            elif state["piece"] in pieces:
+                pieces.remove(state["piece"])
+    errors = 0
     board = state["board"]
-    play(board, client, errors, lives, state, pieces)
-    
-    if state["piece"] == "null":
-        global empty_cell, full_cell
+    pieces = play(board, client, lives, state, pieces)
+
+    if not full_cell:
         pieces = ['SDEC', 'SDFP', 'SLEC', 'SLFP', 'BDFC', 'BDFP', 'BLEP', 'BDEP', 'SDFC', 'SLEP', 'SLFC', 'BLFP', 'BDEC', 'BLFC', 'SDEP', 'BLEC']
-        board = []
-        empty_cell = set(range(16))
-        full_cell = set()
+        print("new party")
     
     
 
@@ -65,9 +70,11 @@ def Message_recieved(s:socket):
     # respond to the play with "play"
     if message["request"] == "play":
         info_state(message["lives"], message["errors"], message["state"], client)
-    
+
+
+
 with socket.socket() as s:
-    s.bind((server_ip, port))
+    s.bind(("0.0.0.0", port))
     s.listen()
     while True:
         Message_recieved(s)
