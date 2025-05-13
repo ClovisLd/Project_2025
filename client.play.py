@@ -58,3 +58,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
 # 2. Ensuite, on écoute les requêtes ping et play
 listen_for_requests()
+print("df")
