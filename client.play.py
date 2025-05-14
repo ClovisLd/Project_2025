@@ -1,140 +1,159 @@
-import random
-import json
 import socket
+import json
+import random
+import time
+from itertools import product
 
-# Fonction pour évaluer l'état du jeu
-def evaluate_state(board, current_player, players):
-    """
-    Fonction d'évaluation qui renvoie un score basé sur l'état actuel du jeu.
-    Plus le joueur est proche de la ligne d'arrivée, plus la valeur est élevée.
-    """
-    # Simplification de l'évaluation : ici, on renvoie un score basé sur la position du joueur
-    if current_player == players[0]:
-        return len([p for p in board if p == current_player])  # Exemple de score
-    else:
-        return -len([p for p in board if p == current_player])
+# Configuration du serveur et du client
+SERVER_HOST = "localhost"
+SERVER_PORT = 3000
+CLIENT_PORT = 8888
 
-# Fonction pour obtenir tous les coups possibles
-def get_possible_moves(board, current_player):
-    """
-    Retourne une liste de coups possibles pour le joueur actuel.
-    Chaque coup consiste en une position sur le plateau
-    """
-    # Exemple de génération de coups : nous choisissons des positions vides (simplification)
-    moves = []
-    for i in range(len(board)):
-        if board[i] is None:  # Si la case est vide
-            moves.append(i)  # Ajouter cette case comme un coup possible
-    return moves
+# Génère toutes les pièces possibles du jeu Quarto (16 pièces)
+def generate_all_pieces():
+    features = [['B', 'S'], ['D', 'L'], ['E', 'F'], ['C', 'P']]
+    return [''.join(p) for p in product(*features)]
 
-# Fonction pour appliquer un coup
-def apply_move(board, move, current_player):
-    """
-    Applique le coup sur le plateau.
-    Ici, on remplace simplement une case vide par le joueur actuel.
-    """
-    new_board = list(board)
-    new_board[move] = current_player
-    return new_board
+# Liste des lignes gagnantes possibles sur le plateau 4x4
+def winning_lines():
+    return [
+        [0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15],  # lignes
+        [0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15],  # colonnes
+        [0, 5, 10, 15], [3, 6, 9, 12]  # diagonales
+    ]
 
-# Fonction pour vérifier si le jeu est terminé
-def game_over(board):
-    """
-    Vérifie si le jeu est terminé.
-    Par exemple, si tous les joueurs ont joué, ou si un joueur a atteint sa ligne d'arrivée.
-    """
-    # Simplification de la fin de jeu : à implémenter selon les règles
+# Vérifie si une configuration est gagnante
+def is_winning(board):
+    for line in winning_lines():
+        pieces = [board[i] for i in line if board[i] is not None]
+        if len(pieces) != 4:
+            continue
+        for i in range(4):
+            features = [p[i] for p in pieces]
+            if all(f == features[0] for f in features):
+                return True
     return False
 
-# Fonction Minimax
-def minimax(board, depth, maximizing_player, current_player, players, alpha, beta):
-    """
-    Algorithme Minimax avec élagage alpha-bêta.
-    Maximizing player : Le joueur qui essaie de maximiser son score.
-    """
-    # Évaluer l'état du jeu à la profondeur 0 (fin de jeu ou profondeur maximale)
-    if depth == 0 or game_over(board):
-        return evaluate_state(board, current_player, players), None
+# Détermine si la partie est terminée (victoire ou plateau plein)
+def game_over(state):
+    return is_winning(state["board"]) or all(cell is not None for cell in state["board"])
 
-    moves = get_possible_moves(board, current_player)
-    
-    if maximizing_player:
-        max_eval = float('-inf')
-        best_move = None
-        for move in moves:
-            new_board = apply_move(board, move, current_player)
-            eval, _ = minimax(new_board, depth - 1, False, current_player, players, alpha, beta)
-            if eval > max_eval:
-                max_eval = eval
-                best_move = move
-            alpha = max(alpha, eval)
-            if beta <= alpha:
-                break
-        return max_eval, best_move
-    else:
-        min_eval = float('inf')
-        best_move = None
-        for move in moves:
-            new_board = apply_move(board, move, current_player)
-            eval, _ = minimax(new_board, depth - 1, True, current_player, players, alpha, beta)
-            if eval < min_eval:
-                min_eval = eval
-                best_move = move
-            beta = min(beta, eval)
-            if beta <= alpha:
-                break
-        return min_eval, best_move
+# Fonction d'utilité pour Minimax
+def utility(state, player):
+    if is_winning(state["board"]):
+        return 1 if state["current"] == player else -1
+    return 0
 
-# Fonction pour calculer le meilleur coup
-def compute_best_move(board, players, current_player):
-    """
-    Utilise Minimax pour déterminer le meilleur coup.
-    """
-    # Profondeur de recherche (à ajuster selon les besoins)
-    depth = 3
-    maximizing_player = (current_player == players[0])
+# Récupère l'index du joueur courant
+def get_current_player(state):
+    return state["current"]
 
-    # Alpha-Bêta initialisation
-    alpha = float('-inf')
-    beta = float('inf')
+# Récupère toutes les positions libres du plateau
+def get_possible_positions(board):
+    return [i for i, cell in enumerate(board) if cell is None]
 
-    _, best_move = minimax(board, depth, maximizing_player, current_player, players, alpha, beta)
-    return best_move
+# Récupère les pièces encore disponibles
+def get_remaining_pieces(board, current_piece):
+    return [p for p in generate_all_pieces() if p not in board and p != current_piece]
 
-# Fonction de traitement des requêtes de jeu
-def handle_play(conn, play_data):
-    print("Contenu de la requête play :", json.dumps(play_data, indent=2))  # Debug
-
-    # Extraire l'état du jeu et les informations sur le joueur actuel
-    board = play_data["board"]
-    current_player = play_data["players"][play_data["current"]]
-    piece = play_data["piece"]
-
-    # Calculer le meilleur coup en utilisant Minimax
-    best_move = compute_best_move(board, play_data["players"], current_player)
-
-    # Réponse avec le coup à jouer
-    response = {
-        "response": "move",
-        "pos": best_move,  # La position où poser la pièce
-        "piece": piece,  # La pièce que l'on va donner à l'adversaire
-        "message": f"Player {current_player} is playing!"
+# Applique un coup et retourne un nouvel état du jeu
+def apply_move(state, pos, next_piece):
+    new_board = state["board"][:]
+    new_board[pos] = state["piece"]
+    return {
+        "players": state["players"],
+        "current": 1 - state["current"],
+        "board": new_board,
+        "piece": next_piece
     }
-    
+
+# Algorithme Minimax récursif
+def minimax(state, player, depth=2):
+    if game_over(state) or depth == 0:
+        return utility(state, player), None
+
+    best_value = float('-inf') if state["current"] == player else float('inf')
+    best_action = None
+
+    for pos in get_possible_positions(state["board"]):
+        for next_piece in get_remaining_pieces(state["board"], state["piece"]):
+            child = apply_move(state, pos, next_piece)
+            val, _ = minimax(child, player, depth - 1)
+
+            if state["current"] == player:
+                if val > best_value:
+                    best_value, best_action = val, (pos, next_piece)
+            else:
+                if val < best_value:
+                    best_value, best_action = val, (pos, next_piece)
+
+    return best_value, best_action
+
+# Fonction principale pour calculer le meilleur coup à jouer
+def compute_best_move(board, players, current_player, current_piece):
+    state = {
+        "players": players,
+        "current": players.index(current_player),
+        "board": board,
+        "piece": current_piece
+    }
+    _, action = minimax(state, state["current"])
+    if action:
+        return action
+    return None, None
+
+# Répond au ping du serveur
+def send_pong(conn):
+    response = {"response": "pong"}
+    conn.sendall(json.dumps(response).encode())
+    print("pong envoyé")
+
+# Gère une requête "play" (jouer un coup)
+def handle_play(conn, play_data):
+    print("Contenu de la requête play:", json.dumps(play_data, indent=2))
+
+    board = play_data["state"]["board"]
+    piece_to_play = play_data["state"]["piece"]
+    players = play_data["state"]["players"]
+    current_index = play_data["state"]["current"]
+    current_player = players[current_index]
+
+    # Si aucune pièce à jouer et plateau plein : abandonner
+    if piece_to_play is None and all(cell is not None for cell in board):
+        response = {"response": "giveup"}
+        conn.sendall(json.dumps(response).encode())
+        print("Aucun coup possible, abandon envoyé.")
+        return
+
+    # Calcul du meilleur coup
+    pos, given_piece = compute_best_move(board, players, current_player, piece_to_play)
+
+    # Si aucun coup possible, abandon
+    if pos is None:
+        response = {"response": "giveup"}
+    else:
+        response = {
+            "response": "move",
+            "pos": pos,
+            "piece": given_piece,
+            "message": f"Player {current_player} is playing!"
+        }
+
     conn.sendall(json.dumps(response).encode())
     print("Réponse envoyée:", json.dumps(response, indent=2))
 
-# Fonction pour écouter les requêtes du serveur
+# Boucle d'écoute du client pour recevoir les requêtes du serveur
 def listen_for_requests():
-    """Écoute les requêtes du serveur"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 8888))  # Port client
+        s.bind(("", CLIENT_PORT))
         s.listen()
-        print(f"Écoute sur le port 8888...")
+        print(f"Écoute sur le port {CLIENT_PORT}...")
         while True:
             conn, _ = s.accept()
             with conn:
                 data = conn.recv(4096).decode()
+                if not data:
+                    continue
                 request = json.loads(data)
                 if request["request"] == "ping":
                     send_pong(conn)
@@ -143,28 +162,18 @@ def listen_for_requests():
                 else:
                     conn.sendall(json.dumps({"response": "error", "error": "unknown request"}).encode())
 
-# Envoi de la requête subscribe pour se connecter au serveur
-def subscribe():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect(("localhost", 3000))  # Connexion au serveur
-        subscribe_msg = {
-            "request": "subscribe",
-            "port": 8888,
-            "name": "FunQuoridorClient",
-            "matricules": ["12345", "67890"]
-        }
-        s.sendall(json.dumps(subscribe_msg).encode())
-        response = s.recv(4096).decode()
-        print("Réponse du serveur:", response)
+# Abonnement initial au serveur Quarto
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.connect((SERVER_HOST, SERVER_PORT))
+    subscribe_msg = {
+        "request": "subscribe",
+        "port": CLIENT_PORT,
+        "name": "QuartoBotAI",
+        "matricules": ["12345", "67890"]
+    }
+    s.sendall(json.dumps(subscribe_msg).encode())
+    response = s.recv(4096).decode()
+    print("Réponse du serveur:", response)
 
-# Fonction pour répondre au ping
-def send_pong(conn):
-    """Répond à un ping"""
-    response = {"response": "pong"}
-    conn.sendall(json.dumps(response).encode())
-    print("pong envoyé")
-
-# Lancement de l'abonnement et de l'écoute des requêtes
-if __name__ == "__main__":
-    subscribe()  # Connexion au serveur
-    listen_for_requests()  # Écoute des requêtes de jeu
+# Lancement de l'écoute
+listen_for_requests()
