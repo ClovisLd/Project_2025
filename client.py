@@ -8,7 +8,7 @@ from play import play, full_cell, Type_left
 
 
 #172.17.10.133
-server_ip = "localhost"
+server_ip = "172.17.10.48"
 port = int(sys.argv[1])
 turn = 0
 
@@ -29,7 +29,7 @@ with socket.socket() as client:
         {"request": "subscribe",
         "port": port,
         "name": sys.argv[2],
-        "matricules": [f"1{port}", f"2{port}"]}
+        "matricules": [f"23274", f"2{port}"]}
         ).encode('utf-8'))
     print(client.recv(32).decode())
 
